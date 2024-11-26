@@ -1,17 +1,21 @@
 package com.github.cybellereaper.spell
 
+import com.mongodb.client.MongoClient
+import com.mongodb.client.MongoDatabase
+import com.mongodb.client.model.ReplaceOptions
 import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerHandAnimationEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.item.Material
+import org.bson.Document
 import org.python.util.PythonInterpreter
 import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.exists
-
+import java.util.Base64
 object SpellSystem {
     private const val CLICK_TIMEOUT = 1000L
     private const val MAX_SIGHT_RANGE = 50.0
@@ -19,19 +23,64 @@ object SpellSystem {
     private val interpreter = PythonInterpreter()
     enum class ClickType { LEFT, RIGHT }
     enum class SpellMode { SINGLE, AOE, SELF }
-
+    enum class SpellSource { DATABASE }
     data class Spell(
         val name: String,
         val sequence: List<ClickType>,
         val mode: SpellMode,
-        val scriptPath: String
+        val scriptContent: String,
+        val source: SpellSource = SpellSource.DATABASE
     )
 
     private val spells = mutableSetOf<Spell>()
     private val clickStates = mutableMapOf<Player, ClickState>()
+    private lateinit var database: MongoDatabase
 
-    fun registerSpell(name: String, sequence: List<ClickType>, mode: SpellMode, scriptPath: String) {
-        spells += Spell(name, sequence, mode, scriptPath)
+    fun initialize(mongoClient: MongoClient) {
+        database = mongoClient.getDatabase("spells_db")
+        loadSpellsFromDatabase()
+    }
+
+    private fun loadSpellsFromDatabase() {
+        val collection = database.getCollection("spells")
+        collection.find().forEach { doc ->
+            spells += Spell(
+                name = doc.getString("_id"),
+                sequence = doc.getList("sequence", String::class.java)
+                    .map { ClickType.valueOf(it) },
+                mode = SpellMode.valueOf(doc.getString("mode")),
+                scriptContent = String(Base64.getDecoder().decode(doc.getString("scriptContent"))),
+            )
+        }
+    }
+    fun registerSpell(name: String, sequence: List<ClickType>, mode: SpellMode, scriptContent: String): Spell {
+        val collection = database.getCollection("spells")
+
+        // Encode script content to base64
+        val encodedScript = Base64.getEncoder().encodeToString(scriptContent.toByteArray())
+
+        // Try to find existing spell
+        val existingSpell = collection.find(Document("_id", name)).first()
+        if (existingSpell != null) {
+            // Convert document to Spell and return it
+            return Spell(
+                name = existingSpell.getString("_id"),
+                sequence = existingSpell.getList("sequence", String::class.java)
+                    .map { ClickType.valueOf(it) },
+                mode = SpellMode.valueOf(existingSpell.getString("mode")),
+                scriptContent = String(Base64.getDecoder().decode(existingSpell.getString("scriptContent")))
+            )
+        }
+
+        val document = Document()
+            .append("_id", name)
+            .append("sequence", sequence.map { it.name })
+            .append("mode", mode.name)
+            .append("scriptContent", encodedScript)
+
+        collection.insertOne(document)
+
+        return Spell(name, sequence, mode, scriptContent)
     }
 
     fun handleWandInteraction(player: Player, material: Material, clickType: ClickType) {
@@ -82,9 +131,7 @@ object SpellSystem {
                 .firstOrNull { it != caster }
                 ?.let { listOf(it) }
                 ?: emptyList()
-
             SpellMode.SELF -> listOf(caster)
-
             SpellMode.AOE -> caster.instance?.getNearbyEntities(caster.position, MAX_SIGHT_RANGE)
                 ?.filterNot { it == caster }
                 ?: emptyList()
@@ -94,12 +141,7 @@ object SpellSystem {
             interpreter.set("caster", caster)
             interpreter.set("targets", targets)
             interpreter.set("spellName", spell.name)
-            val scriptFile = File(spell.scriptPath)
-            if (!scriptFile.exists()) {
-                caster.sendMessage(Component.text("Spell script not found: ${spell.scriptPath}"))
-                return
-            }
-            interpreter.execfile(scriptFile.absolutePath)
+            interpreter.exec(spell.scriptContent)
         } catch (e: Exception) {
             caster.sendMessage(Component.text("Failed to execute spell: ${e.message}"))
             e.printStackTrace()

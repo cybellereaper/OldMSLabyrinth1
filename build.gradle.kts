@@ -13,6 +13,7 @@ repositories {
 }
 
 dependencies {
+    implementation("org.litote.kmongo:kmongo:5.1.0")
     implementation("org.python:jython-standalone:2.7.3")
     implementation("net.minestom:minestom-snapshots:18d6e0c6d6")
     testImplementation(kotlin("test"))

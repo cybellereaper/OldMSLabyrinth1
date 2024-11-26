@@ -3,6 +3,7 @@ package com.github.cybellereaper.com.github.cybellereaper
 import com.github.cybellereaper.spell.SpellSystem
 import com.github.cybellereaper.spell.SpellSystem.ClickType
 import com.github.cybellereaper.spell.SpellSystem.SpellMode
+import com.mongodb.client.MongoClients
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
@@ -33,26 +34,17 @@ fun main() {
         }
     }
 
+    val mongoClient = MongoClients.create("mongodb://localhost:27017")
+    SpellSystem.initialize(mongoClient)
+
     SpellSystem.registerSpell(
-        name = "heal",
+        name = "fireball",
         sequence = listOf(ClickType.LEFT, ClickType.RIGHT, ClickType.LEFT),
-        mode = SpellMode.SELF,
-        scriptPath = "plugins/spells/heal.py"
-    )
-
-    SpellSystem.registerSpell(
-        name = "Meteor Shower",
-        sequence = listOf(ClickType.LEFT, ClickType.LEFT, ClickType.RIGHT),
-        mode = SpellMode.AOE,
-        scriptPath = "plugins/spells/meteor_shower.py"
-    )
-
-
-    SpellSystem.registerSpell(
-        name = "random_teleport",
-        sequence = listOf(ClickType.RIGHT, ClickType.RIGHT, ClickType.RIGHT),
-        mode = SpellMode.SELF,
-        scriptPath = "plugins/spells/random_teleport.py"
+        mode = SpellMode.SINGLE,
+        scriptContent = """
+        # -*- coding: utf-8 -*-
+            caster.sendMessage("Launched fireball at target!")
+    """.trimIndent()
     )
 
     globalEventHandler.apply {
