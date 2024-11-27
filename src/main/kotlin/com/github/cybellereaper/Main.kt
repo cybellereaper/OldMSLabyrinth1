@@ -34,17 +34,11 @@ fun main() {
         }
     }
 
-    val mongoClient = MongoClients.create("mongodb://localhost:27017")
-    SpellSystem.initialize(mongoClient)
-
     SpellSystem.registerSpell(
         name = "fireball",
         sequence = listOf(ClickType.LEFT, ClickType.RIGHT, ClickType.LEFT),
         mode = SpellMode.SINGLE,
-        scriptContent = """
-        # -*- coding: utf-8 -*-
-            caster.sendMessage("Launched fireball at target!")
-    """.trimIndent()
+        scriptContent = ""
     )
 
     globalEventHandler.apply {
