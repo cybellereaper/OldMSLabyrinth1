@@ -1,9 +1,6 @@
 package com.github.cybellereaper
 
 import com.github.cybellereaper.spell.SpellSystem
-import com.github.cybellereaper.spell.player.SpellSelection
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
@@ -13,9 +10,6 @@ import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.extras.MojangAuth
 import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.block.Block
-import net.minestom.server.item.ItemStack
-import net.minestom.server.item.Material
-import org.litote.kmongo.id.StringId
 
 
 suspend fun main() {

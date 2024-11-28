@@ -3,11 +3,9 @@ package com.github.cybellereaper.database
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.model.Filters.eq
 import com.mongodb.client.model.ReplaceOptions
-import com.mongodb.client.model.UpdateOptions
 import org.litote.kmongo.Id
 import org.litote.kmongo.deleteOneById
 import org.litote.kmongo.findOneById
-import org.litote.kmongo.updateOneById
 import java.util.*
 
 
@@ -23,11 +21,11 @@ open class MongoStorage<T : Any>(private val entityClass: Class<T>) : Storage<T>
     }
 
     override suspend fun insertOrUpdate(id: Id<T>, entity: T) {
-       collection.replaceOne(
-           eq("_id", id),
-           entity,
-           ReplaceOptions().upsert(true)
-       )
+        collection.replaceOne(
+            eq("_id", id),
+            entity,
+            ReplaceOptions().upsert(true)
+        )
     }
 
     override suspend fun get(id: Id<T>): T? = collection.findOneById(id)

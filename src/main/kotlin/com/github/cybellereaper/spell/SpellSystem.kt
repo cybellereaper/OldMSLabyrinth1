@@ -124,6 +124,7 @@ object SpellSystem {
             .filterIsInstance<Entity>()
             .firstOrNull { it != caster }
             ?.let(::listOf) ?: emptyList()
+
         SpellMode.SELF -> listOf(caster)
         SpellMode.AOE -> caster.instance?.getNearbyEntities(caster.position, MAX_SIGHT_RANGE)
             ?.filterNot { it == caster } ?: emptyList()
