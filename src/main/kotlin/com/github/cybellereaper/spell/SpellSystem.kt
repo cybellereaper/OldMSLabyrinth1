@@ -7,6 +7,7 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerHandAnimationEvent
@@ -23,9 +24,15 @@ object SpellSystem {
     private const val SPELL_SEQUENCE_LENGTH = 3
     private const val CLICK_TIMEOUT = 700L
     private const val MAX_SIGHT_RANGE = 50.0
+    private const val CAST_INFO_DISPLAY_TIME = 3000L
     private val WAND_MATERIAL = Material.STICK
     private val interpreter by lazy { PythonInterpreter() }
     private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    private val playerSpellStorage = PlayerSpellStorage()
+    private val spellStorage = MongoStorage(SpellDocument::class.java)
+    private val clickStates = ConcurrentHashMap<Player, ClickState>()
+    private val castingStates = ConcurrentHashMap<Player, CastingState>()
 
     @Serializable
     enum class ClickType { LEFT, RIGHT }
@@ -37,13 +44,12 @@ object SpellSystem {
     data class SpellDocument(
         @SerialName("_id") @BsonId val _id: Id<SpellDocument>,
         val mode: SpellMode,
+        val mana: Int,
+        val cooldown: Float = 0.0f,
         var scriptContent: String,
         var disabled: Boolean = false
     )
 
-    private val playerSpellStorage = PlayerSpellStorage()
-    private val spellStorage = MongoStorage(SpellDocument::class.java)
-    private val clickStates = ConcurrentHashMap<Player, ClickState>()
 
     suspend fun getSpell(name: String): SpellDocument? = withContext(Dispatchers.IO) {
         spellStorage.get(StringId(name))
@@ -75,23 +81,80 @@ object SpellSystem {
         }
     }
 
-    private fun updateActionBar(player: Player) {
-        player.sendActionBar(Component.text(clickStates[player]?.clicks?.joinToString(" ") ?: ""))
+    private data class CastingState(
+        val spellName: String,
+        val manaCost: Int
+    )
+
+    private fun buildActionBarComponent(state: ClickState?, castingState: CastingState?): Component {
+        val component = Component.text()
+            .append(Component.text("Spell: ", NamedTextColor.GOLD))
+            .append(createClickSequence(state?.clicks ?: emptyList()))
+            .append(createRemainingIndicators(SPELL_SEQUENCE_LENGTH - (state?.clicks?.size ?: 0)))
+
+        if (castingState != null) {
+            component.append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(castingState.spellName, NamedTextColor.LIGHT_PURPLE))
+                .append(Component.text(" (", NamedTextColor.GRAY))
+                .append(Component.text("${castingState.manaCost} mana", NamedTextColor.AQUA))
+                .append(Component.text(")", NamedTextColor.GRAY))
+        }
+
+        return component.build()
     }
 
-    private suspend fun checkAndCastSpell(player: Player) = withContext(Dispatchers.Default) {
-        val state = clickStates[player] ?: return@withContext
-        if (state.clicks.size < SPELL_SEQUENCE_LENGTH) return@withContext
+    private fun updateActionBar(player: Player) {
+        val state = clickStates[player]
+        val castingState = castingStates[player]
+        val component = buildActionBarComponent(state, castingState)
+        player.sendActionBar(component)
 
-        val playerId = player.identity().uuid().toString()
-        val spellSelections = playerSpellStorage.getAllSpells(playerId)
-        val spellSelection = spellSelections.find { it.sequence == state.clicks } ?: return@withContext
-        val spell = playerSpellStorage.getSpell(playerId, spellSelection) ?: return@withContext
+        if (castingState != null) {
+            coroutineScope.launch {
+                delay(CAST_INFO_DISPLAY_TIME)
+                castingStates.remove(player)
+                updateActionBar(player)
+            }
+        }
+    }
 
-        if (!spell.disabled) {
+    private fun createRemainingIndicators(count: Int): Component {
+        return Component.join(
+            Component.text(" "),
+            List(count) { Component.text("○", NamedTextColor.GRAY) }
+        )
+    }
+
+    private fun createClickSequence(clicks: List<ClickType>): Component {
+        return Component.join(
+            Component.text(" "),
+            clicks.map { click ->
+                when (click) {
+                    ClickType.LEFT -> Component.text("L", NamedTextColor.RED)
+                    ClickType.RIGHT -> Component.text("R", NamedTextColor.BLUE)
+                }
+            }
+        )
+    }
+
+    private suspend fun checkAndCastSpell(player: Player) {
+        val state = clickStates[player] ?: return
+        if (state.clicks.size < SPELL_SEQUENCE_LENGTH) return
+
+        val spell = getSpellFromClicks(player)
+        if (spell != null && !spell.disabled) {
+            castingStates[player] = CastingState(spell._id.toString(), spell.mana)
             executeSpell(spell, player)
         }
         state.clicks.clear()
+        updateActionBar(player)
+    }
+
+    private suspend fun getSpellFromClicks(player: Player): SpellDocument? {
+        val playerId = player.identity().uuid().toString()
+        val spellSelections = playerSpellStorage.getAllSpells(playerId)
+        val spellSelection = spellSelections.find { it.sequence == clickStates[player]?.clicks } ?: return null
+        return playerSpellStorage.getSpell(playerId, spellSelection)
     }
 
     suspend fun addSpell(spell: SpellDocument) = withContext(Dispatchers.IO) {
@@ -114,7 +177,7 @@ object SpellSystem {
                 exec(decodedScript)
             }
         } catch (e: Exception) {
-            caster.sendMessage(Component.text("Failed to execute spell: ${e.message}"))
+            caster.sendActionBar(Component.text("Failed to cast spell: ${e.message}", NamedTextColor.RED))
             e.printStackTrace()
         }
     }
