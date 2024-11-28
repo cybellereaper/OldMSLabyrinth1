@@ -1,6 +1,9 @@
 package com.github.cybellereaper.spell
 
 import com.github.cybellereaper.database.MongoStorage
+import com.github.cybellereaper.spell.player.PlayerSpellStorage
+import com.github.cybellereaper.spell.player.SpellSelection
+import kotlinx.coroutines.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import net.kyori.adventure.text.Component
@@ -14,12 +17,15 @@ import org.litote.kmongo.Id
 import org.litote.kmongo.id.StringId
 import org.python.util.PythonInterpreter
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 object SpellSystem {
-    private const val CLICK_TIMEOUT = 1000L
+    private const val SPELL_SEQUENCE_LENGTH = 3
+    private const val CLICK_TIMEOUT = 700L
     private const val MAX_SIGHT_RANGE = 50.0
     private val WAND_MATERIAL = Material.STICK
     private val interpreter by lazy { PythonInterpreter() }
+    private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     @Serializable
     enum class ClickType { LEFT, RIGHT }
@@ -29,62 +35,72 @@ object SpellSystem {
 
     @Serializable
     data class SpellDocument(
-        @SerialName("_id") @BsonId
-        val _id: Id<SpellDocument>,
-        val sequence: List<ClickType>,
+        @SerialName("_id") @BsonId val _id: Id<SpellDocument>,
         val mode: SpellMode,
-        val scriptContent: String
+        var scriptContent: String,
+        var disabled: Boolean = false
     )
 
+    private val playerSpellStorage = PlayerSpellStorage()
     private val spellStorage = MongoStorage(SpellDocument::class.java)
-    private val clickStates = mutableMapOf<Player, ClickState>()
+    private val clickStates = ConcurrentHashMap<Player, ClickState>()
 
-    fun registerSpell(name: String, sequence: List<ClickType>, mode: SpellMode, scriptContent: String): SpellDocument {
-        val id = StringId<SpellDocument>(name)
-        return spellStorage.get(id) ?: SpellDocument(
-            _id = id,
-            sequence = sequence,
-            mode = mode,
-            scriptContent = Base64.getEncoder().encodeToString(scriptContent.toByteArray())
-        ).also { spellStorage.insertOrUpdate(id, it) }
+    suspend fun getSpell(name: String): SpellDocument? = withContext(Dispatchers.IO) {
+        spellStorage.get(StringId(name))
     }
 
-    fun handleWandUse(event: PlayerUseItemEvent) {
+    suspend fun addPlayerSpell(playerId: String, spell: SpellSelection) = withContext(Dispatchers.IO) {
+        playerSpellStorage.addSpell(playerId, spell)
+    }
+
+    fun handleWandUse(event: PlayerUseItemEvent) =
         handleWandInteraction(event.player, event.itemStack.material(), ClickType.RIGHT)
-    }
 
-    fun handleWandAnimation(event: PlayerHandAnimationEvent) {
+    fun handleWandAnimation(event: PlayerHandAnimationEvent) =
         handleWandInteraction(event.player, event.player.itemInMainHand.material(), ClickType.LEFT)
-    }
 
     private fun handleWandInteraction(player: Player, material: Material, clickType: ClickType) {
         if (material != WAND_MATERIAL) return
 
-        clickStates.getOrPut(player) { ClickState() }.apply {
-            if (hasTimedOut()) clicks.clear()
-            clicks += clickType
-            lastClickTime = System.currentTimeMillis()
-
-            updateActionBar(player)
-            checkAndCastSpell(player)
+        clickStates.compute(player) { _, state ->
+            (state ?: ClickState()).apply {
+                if (hasTimedOut()) clicks.clear()
+                if (clicks.size < SPELL_SEQUENCE_LENGTH) {
+                    clicks.add(clickType)
+                    lastClickTime = System.currentTimeMillis()
+                    updateActionBar(player)
+                    coroutineScope.launch { checkAndCastSpell(player) }
+                }
+            }
         }
     }
 
     private fun updateActionBar(player: Player) {
-        clickStates[player]?.let { state ->
-            player.sendActionBar(Component.text(state.clicks.joinToString(" ")))
-        }
+        player.sendActionBar(Component.text(clickStates[player]?.clicks?.joinToString(" ") ?: ""))
     }
 
-    private fun checkAndCastSpell(player: Player) {
-        val state = clickStates[player] ?: return
+    private suspend fun checkAndCastSpell(player: Player) = withContext(Dispatchers.Default) {
+        val state = clickStates[player] ?: return@withContext
+        if (state.clicks.size < SPELL_SEQUENCE_LENGTH) return@withContext
 
-        spellStorage.getAll().firstOrNull { spell ->
-            state.clicks.takeLast(spell.sequence.size) == spell.sequence
-        }?.let { spell ->
+        val playerId = player.identity().uuid().toString()
+        val spellSelections = playerSpellStorage.getAllSpells(playerId)
+        val spellSelection = spellSelections.find { it.sequence == state.clicks } ?: return@withContext
+        val spell = playerSpellStorage.getSpell(playerId, spellSelection) ?: return@withContext
+
+        if (!spell.disabled) {
             executeSpell(spell, player)
-            state.clicks.clear()
         }
+        state.clicks.clear()
+    }
+
+    suspend fun addSpell(spell: SpellDocument) = withContext(Dispatchers.IO) {
+        spell.scriptContent = Base64.getEncoder().encodeToString(spell.scriptContent.toByteArray(Charsets.UTF_8))
+        spellStorage.insertOrUpdate(spell._id, spell)
+    }
+
+    suspend fun removeSpell(spell: SpellDocument) = withContext(Dispatchers.IO) {
+        spellStorage.remove(spell._id)
     }
 
     private fun executeSpell(spell: SpellDocument, caster: Player) {
@@ -107,17 +123,15 @@ object SpellSystem {
         SpellMode.SINGLE -> caster.getLineOfSight(MAX_SIGHT_RANGE.toInt())
             .filterIsInstance<Entity>()
             .firstOrNull { it != caster }
-            ?.let { listOf(it) }
-            ?: emptyList()
+            ?.let(::listOf) ?: emptyList()
         SpellMode.SELF -> listOf(caster)
         SpellMode.AOE -> caster.instance?.getNearbyEntities(caster.position, MAX_SIGHT_RANGE)
-            ?.filterNot { it == caster }
-            ?: emptyList()
+            ?.filterNot { it == caster } ?: emptyList()
     }
 
     private data class ClickState(
-        var lastClickTime: Long = System.currentTimeMillis(),
-        val clicks: MutableList<ClickType> = mutableListOf()
+        @Volatile var lastClickTime: Long = System.currentTimeMillis(),
+        val clicks: MutableList<ClickType> = Collections.synchronizedList(ArrayList(SPELL_SEQUENCE_LENGTH))
     ) {
         fun hasTimedOut() = System.currentTimeMillis() - lastClickTime > CLICK_TIMEOUT
     }

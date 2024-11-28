@@ -1,7 +1,9 @@
 package com.github.cybellereaper.database
 
+import com.mongodb.client.MongoCollection
+import com.mongodb.client.model.Filters.eq
+import com.mongodb.client.model.ReplaceOptions
 import com.mongodb.client.model.UpdateOptions
-import com.mongodb.client.model.changestream.ChangeStreamDocument
 import org.litote.kmongo.Id
 import org.litote.kmongo.deleteOneById
 import org.litote.kmongo.findOneById
@@ -14,26 +16,25 @@ open class MongoStorage<T : Any>(private val entityClass: Class<T>) : Storage<T>
         private const val DATABASE_NAME = "Perplex"
     }
 
-    private val collection by lazy {
-        val database = MongoManager.mongodbClient.getDatabase(DATABASE_NAME)
-        database.getCollection(collectionName, entityClass)
+    private val collection: MongoCollection<T> by lazy {
+        MongoManager.mongodbClient
+            .getDatabase(DATABASE_NAME)
+            .getCollection(entityClass.simpleName.lowercase(Locale.getDefault()), entityClass)
     }
 
-    protected val collectionName: String = entityClass.simpleName.lowercase(Locale.getDefault())
-
-    override fun insertOrUpdate(id: Id<T>, entity: T) {
-        collection.updateOneById(id, entity, UpdateOptions().upsert(true))
+    override suspend fun insertOrUpdate(id: Id<T>, entity: T) {
+       collection.replaceOne(
+           eq("_id", id),
+           entity,
+           ReplaceOptions().upsert(true)
+       )
     }
 
-    override fun get(id: Id<T>): T? = collection.findOneById(id)
+    override suspend fun get(id: Id<T>): T? = collection.findOneById(id)
 
-    override fun getAll(): List<T> = collection.find().toList()
+    override suspend fun getAll(): List<T> = collection.find().toList()
 
-    override fun remove(id: Id<T>) {
+    override suspend fun remove(id: Id<T>) {
         collection.deleteOneById(id)
-    }
-
-    override fun listenForChanges(onChange: (ChangeStreamDocument<T>) -> Unit) {
-        TODO("Not yet implemented")
     }
 }

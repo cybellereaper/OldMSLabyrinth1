@@ -5,9 +5,8 @@ import org.litote.kmongo.Id
 
 
 interface Storage<T : Any> {
-    fun insertOrUpdate(id: Id<T>, entity: T)
-    fun get(id: Id<T>): T?
-    fun getAll(): List<T>
-    fun remove(id: Id<T>)
-    fun listenForChanges(onChange: (ChangeStreamDocument<T>) -> Unit)
+    suspend fun insertOrUpdate(id: Id<T>, entity: T)
+    suspend fun get(id: Id<T>): T?
+    suspend fun getAll(): List<T>
+    suspend fun remove(id: Id<T>)
 }

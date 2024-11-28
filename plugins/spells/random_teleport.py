@@ -1,9 +1,5 @@
 # spells/random_teleport.py
 # -*- coding: utf-8 -*-
-from net.minestom.server.coordinate import Pos
-from net.kyori.adventure.text import Component
-from net.kyori.adventure.text.format.TextColor import color
-import random
 
 # Get current position
 current_pos = caster.getPosition()
