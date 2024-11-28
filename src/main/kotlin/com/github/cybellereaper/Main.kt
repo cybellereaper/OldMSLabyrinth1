@@ -1,9 +1,8 @@
-package com.github.cybellereaper.com.github.cybellereaper
+package com.github.cybellereaper
 
 import com.github.cybellereaper.spell.SpellSystem
 import com.github.cybellereaper.spell.SpellSystem.ClickType
 import com.github.cybellereaper.spell.SpellSystem.SpellMode
-import com.mongodb.client.MongoClients
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode

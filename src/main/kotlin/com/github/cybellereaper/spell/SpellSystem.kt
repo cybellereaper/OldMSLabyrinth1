@@ -1,6 +1,7 @@
 package com.github.cybellereaper.spell
 
 import com.github.cybellereaper.database.MongoStorage
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Entity
@@ -8,6 +9,7 @@ import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerHandAnimationEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.item.Material
+import org.bson.codecs.pojo.annotations.BsonId
 import org.litote.kmongo.Id
 import org.litote.kmongo.id.StringId
 import org.python.util.PythonInterpreter
@@ -17,7 +19,7 @@ object SpellSystem {
     private const val CLICK_TIMEOUT = 1000L
     private const val MAX_SIGHT_RANGE = 50.0
     private val WAND_MATERIAL = Material.STICK
-    private val interpreter = PythonInterpreter()
+    private val interpreter by lazy { PythonInterpreter() }
 
     @Serializable
     enum class ClickType { LEFT, RIGHT }
@@ -27,6 +29,7 @@ object SpellSystem {
 
     @Serializable
     data class SpellDocument(
+        @SerialName("_id") @BsonId
         val _id: Id<SpellDocument>,
         val sequence: List<ClickType>,
         val mode: SpellMode,
@@ -86,7 +89,6 @@ object SpellSystem {
 
     private fun executeSpell(spell: SpellDocument, caster: Player) {
         val targets = getSpellTargets(spell.mode, caster)
-
         try {
             val decodedScript = Base64.getDecoder().decode(spell.scriptContent).toString(Charsets.UTF_8)
             interpreter.apply {
@@ -107,7 +109,6 @@ object SpellSystem {
             .firstOrNull { it != caster }
             ?.let { listOf(it) }
             ?: emptyList()
-
         SpellMode.SELF -> listOf(caster)
         SpellMode.AOE -> caster.instance?.getNearbyEntities(caster.position, MAX_SIGHT_RANGE)
             ?.filterNot { it == caster }
