@@ -15,7 +15,7 @@ open class MongoStorage<T : Any>(private val entityClass: Class<T>) : Storage<T>
     }
 
     private val collection: MongoCollection<T> by lazy {
-        MongoManager.mongodbClient
+        MongoManager.mongodbClientSettings
             .getDatabase(DATABASE_NAME)
             .getCollection(entityClass.simpleName.lowercase(Locale.getDefault()), entityClass)
     }
@@ -29,6 +29,7 @@ open class MongoStorage<T : Any>(private val entityClass: Class<T>) : Storage<T>
     }
 
     override suspend fun get(id: Id<T>): T? = collection.findOneById(id)
+
 
     override suspend fun getAll(): List<T> = collection.find().toList()
 

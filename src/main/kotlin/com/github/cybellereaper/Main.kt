@@ -1,5 +1,6 @@
 package com.github.cybellereaper
 
+import com.github.cybellereaper.inventory.PlayerInventoryManager
 import com.github.cybellereaper.spell.SpellSystem
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
@@ -24,6 +25,7 @@ suspend fun main() {
     }
 
     val globalEventHandler = MinecraftServer.getGlobalEventHandler()
+
     globalEventHandler.addListener(AsyncPlayerConfigurationEvent::class.java) { event ->
         with(event) {
             spawningInstance = instanceContainer
@@ -31,6 +33,9 @@ suspend fun main() {
             player.gameMode = GameMode.CREATIVE
         }
     }
+
+    PlayerInventoryManager.setupEvents(globalEventHandler)
+
 
     globalEventHandler.apply {
         addListener(PlayerHandAnimationEvent::class.java) { event ->

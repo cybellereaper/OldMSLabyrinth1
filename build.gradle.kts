@@ -15,10 +15,14 @@ repositories {
     maven("https://oss.sonatype.org/content/groups/public/")
 }
 
+
+
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.litote.kmongo:kmongo:4.10.0")
     implementation("org.python:jython-standalone:2.7.3")
+    implementation("io.github.jglrxavpok.hephaistos:common:2.6.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.+")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("net.minestom:minestom-snapshots:18d6e0c6d6")
     testImplementation(kotlin("test"))
