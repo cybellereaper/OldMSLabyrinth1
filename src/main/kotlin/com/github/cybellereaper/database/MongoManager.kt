@@ -1,11 +1,10 @@
 package com.github.cybellereaper.database
 
 import com.fasterxml.jackson.databind.module.SimpleModule
-import com.github.cybellereaper.inventory.ItemStackDeserializer
-import com.github.cybellereaper.inventory.ItemStackSerializer
+import com.github.cybellereaper.inventory.itemstack.ItemStackDeserializer
+import com.github.cybellereaper.inventory.itemstack.ItemStackSerializer
 import com.mongodb.ConnectionString
 import com.mongodb.MongoClientSettings
-import com.mongodb.MongoClientSettings.builder
 import com.mongodb.client.MongoClient
 import net.minestom.server.item.ItemStack
 import org.bson.UuidRepresentation

@@ -1,6 +1,6 @@
 package com.github.cybellereaper
 
-import com.github.cybellereaper.inventory.PlayerInventoryManager
+import com.github.cybellereaper.inventory.player.PlayerInventoryManager
 import com.github.cybellereaper.spell.SpellSystem
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
