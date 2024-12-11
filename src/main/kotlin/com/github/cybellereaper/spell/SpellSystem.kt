@@ -10,6 +10,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.Player
+import net.minestom.server.event.GlobalEventHandler
 import net.minestom.server.event.player.PlayerHandAnimationEvent
 import net.minestom.server.event.player.PlayerUseItemEvent
 import net.minestom.server.item.Material
@@ -164,6 +165,18 @@ object SpellSystem {
 
     suspend fun removeSpell(spell: SpellDocument) = withContext(Dispatchers.IO) {
         spellStorage.remove(spell._id)
+    }
+
+    fun init(event: GlobalEventHandler) {
+        event.apply {
+            addListener(PlayerHandAnimationEvent::class.java) { event ->
+                handleWandAnimation(event)
+            }
+
+            addListener(PlayerUseItemEvent::class.java) { event ->
+                handleWandUse(event)
+            }
+        }
     }
 
     private fun executeSpell(spell: SpellDocument, caster: Player) {
