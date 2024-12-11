@@ -85,7 +85,7 @@ class PerplexMonster(
     private fun handleAttackEvent(event: EntityAttackEvent) {
         if (event.target != entity) return
         (event.target as? LivingEntity)?.let { target ->
-            target.health -= damage.toFloat() // Use the monster's actual damage value instead of hardcoded value
+            target.health -= damage.toFloat()
         }
     }
 }
