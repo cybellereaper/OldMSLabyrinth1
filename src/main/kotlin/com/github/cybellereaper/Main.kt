@@ -9,7 +9,10 @@ import com.github.cybellereaper.quests.*
 import net.minestom.server.MinecraftServer
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.GameMode
+import net.minestom.server.event.entity.EntityDamageEvent
+import net.minestom.server.event.entity.EntityDeathEvent
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
+import net.minestom.server.event.player.PlayerEntityInteractEvent
 import net.minestom.server.extras.MojangAuth
 import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.block.Block
@@ -49,7 +52,7 @@ fun main() {
             id = "goblin",
             name = "goblin",
             level = 1,
-            maxHealth = 200.0,
+            maxHealth = 2.0,
             damage = 5.0,
         )
     )
