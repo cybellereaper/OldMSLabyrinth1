@@ -4,12 +4,8 @@ import net.kyori.adventure.text.Component
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.EntityCreature
 import net.minestom.server.entity.Player
-import net.minestom.server.entity.ai.GoalSelector
-import net.minestom.server.entity.ai.goal.MeleeAttackGoal
 import net.minestom.server.entity.ai.goal.RandomStrollGoal
 import net.minestom.server.instance.Instance
-import org.python.icu.util.TimeUnit
-import java.util.List
 
 
 class PerplexMonster(

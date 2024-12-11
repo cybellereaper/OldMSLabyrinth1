@@ -15,7 +15,7 @@ import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.block.Block
 
 val entityRegistar = PerplexEntityRegistry()
-val questManager   = QuestManager()
+val questManager = QuestManager()
 
 fun main() {
     val minecraftServer = MinecraftServer.init()
